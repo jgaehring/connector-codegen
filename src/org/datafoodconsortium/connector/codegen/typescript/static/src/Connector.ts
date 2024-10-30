@@ -8,6 +8,7 @@ import ConnectorFactory from "./ConnectorFactory.js";
 import ConnectorImporterJsonldStream from "./ConnectorImporterJsonldStream.js";
 import ConnectorStoreMap from "./ConnectorStoreMap.js";
 import context from "./context.js";
+import useDataCapture from "./dataCapture.js";
 import IConnector from "./IConnector.js";
 import IConnectorExporter from "./IConnectorExporter";
 import IConnectorExportOptions from "./IConnectorExportOptions.js";
@@ -41,6 +42,12 @@ import IPlannedConsumptionFlow from "./IPlannedConsumptionFlow.js";
 import IPlannedProductionFlow from "./IPlannedProductionFlow.js";
 import IDefinedProduct from "./IDefinedProduct.js";
 
+const {
+    EXPERIMENTAL_DATA_CAPTURE_ENABLED = false,
+    EXPERIMENTAL_DATA_CAPTURE_EXPORT_URL = '',
+    // @ts-ignore
+} = process && process?.env || {};
+
 export default class Connector implements IConnector {
 
     public FACETS?: ISKOSConcept;
@@ -63,6 +70,9 @@ export default class Connector implements IConnector {
         this.importer = new ConnectorImporterJsonldStream({ context: context });
         const outputContext = "https://www.datafoodconsortium.org";
         this.exporter = new ConnectorExporterJsonldStream(context, outputContext);
+        if (EXPERIMENTAL_DATA_CAPTURE_ENABLED) {
+            useDataCapture(this.exporter, EXPERIMENTAL_DATA_CAPTURE_EXPORT_URL);
+        }
     }
 
     public createAddress(parameters: {semanticId: string, street?: string, postalCode?: string, city?: string, country?: string, doNotStore?: boolean}): IAddress;
