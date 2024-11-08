@@ -11,6 +11,16 @@ class Connector implements IConnector {
     private Semantizer $semantizer;
     private Array $context;
 
+    /**
+     * Observers that will be notified whenever certain methods are called.
+     * Those methods are treated as events and explicitly made visible as public
+     * constants below, so that observers may reference them.
+     */
+    private $observers = [];
+    public const EVENT_WILDCARD = "*";
+    public const EVENT_EXPORT = "export";
+    public const EVENT_IMPORT = "import";
+
     public function __construct() {
         $this->semantizer = new Semantizer();
         $this->setFactory(new ConnectorFactory($this));
@@ -20,6 +30,14 @@ class Connector implements IConnector {
         $this->setPrefix("dfc-pt", "https://github.com/datafoodconsortium/taxonomies/releases/latest/download/productTypes.rdf#");
         $this->setPrefix("dfc-v", "https://github.com/datafoodconsortium/taxonomies/releases/latest/download/vocabulary.rdf#");
         $this->context = ["https://www.datafoodconsortium.org"];
+
+        // Create an empty store for each supported method/event declared above.
+        $reflector = new \ReflectionClass($this);
+        foreach ($reflector->getConstants() as $key => $c) {
+            if (str_starts_with($key, "EVENT_")) {
+                $this->observers[$c] = new \SplObjectStorage();
+            }
+        }
     }
 
     public function setFactory(IFactory $factory): void {
@@ -56,7 +74,9 @@ class Connector implements IConnector {
 
     public function export(Array $objects, Array $context = null): string {
         $context = $context? $context: $this->context;
-        return $this->getSemantizer()->export($objects, $context);
+        $json = $this->getSemantizer()->export($objects, $context);
+        $this->notify(self::EVENT_EXPORT, $json, $objects, $context);
+        return $json;
     }
 
     public function fetch(string $semanticId): Semanticable {
@@ -69,7 +89,60 @@ class Connector implements IConnector {
      * path, or by passing a URL.
      */
     public function import(string $data, string $baseUri = null): Array {
-        return $this->getSemantizer()->import($data, $baseUri);
+        $result = $this->getSemantizer()->import($data, $baseUri);
+        $this->notify(self::EVENT_IMPORT, $result, $data, $baseUri);
+        return $result;
+    }
+
+    /**
+     * Implement SplSubject interface from standard library:
+     * @see https://www.php.net/manual/en/class.splsubject.php
+     * Adapted for multiple event observers based on:
+     * @link https://refactoring.guru/design-patterns/observer/php/example#example-s1
+     */
+    private function initEventGroup(string $event = self::EVENT_WILDCARD): bool {
+        $reflector = new \ReflectionClass($this);
+        $isValid =  $reflector->hasConstant($event);
+        if (!isset($this->observers[$event]) && $isValid) {
+            $this->observers[$event] = new \SplObjectStorage;
+            return true;
+        }
+        return $isValid;
+    }
+
+    private function getEventObservers(string $event = self::EVENT_WILDCARD): array {
+        $isValid = $this->initEventGroup($event);
+        $eventObservers = [];
+        if (!$isValid) return $eventObservers;
+
+        foreach ($this->observers[$event] as $observer) {
+            $eventObservers[] = $observer;
+        }
+        if ($event === self::EVENT_WILDCARD) return $eventObservers;
+
+        foreach ($this->observers[self::EVENT_WILDCARD] as $observer) {
+            $eventObservers[] = $observer;
+        }
+        return $eventObservers;
+    }
+
+    public function attach(\SplObserver $observer, string $event = self::EVENT_WILDCARD): void {
+        $isValid = $this->initEventGroup($event);
+        if ($isValid) $this->observers[$event][] = $observer;
+    }
+
+    public function detach(\SplObserver $observer, string $event = self::EVENT_WILDCARD): void {
+        foreach ($this->getEventObservers($event) as $key => $s) {
+            if ($s === $observer) {
+                unset($this->observers[$event][$key]);
+            }
+        }
+    }
+
+    public function notify(string $event = self::EVENT_WILDCARD, $data = null, ...$other): void {
+        foreach ($this->getEventObservers($event) as $observer) {
+            $observer->update($this, $event, $data, ...$other);
+        }
     }
 
 }
