@@ -38,6 +38,16 @@ class Connector implements IConnector {
                 $this->observers[$c] = new \SplObjectStorage();
             }
         }
+
+        /**
+         * If DataCapture is enabled in the environmental variables, attach the
+         * observer automatically. This should eventually be externalized rather
+         * than calling it here in the constructor.
+         */
+        if ($_ENV["EXPERIMENTAL_DATA_CAPTURE_ENABLED"]) {
+            $observer = new DataCapure($_ENV["EXPERIMENTAL_DATA_CAPTURE_EXPORT_URL"]);
+            $this->attach($observer);
+        }
     }
 
     public function setFactory(IFactory $factory): void {
