@@ -16,6 +16,9 @@
         "virtual-assembly/semantizer": "^v1.0.0-beta2",
         "ml/json-ld": "^1.2"
     },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
     "autoload": {
         "psr-4": {
             "DataFoodConsortium\\Connector\\": "src"
