@@ -326,6 +326,23 @@ The following string values can be passed as the first argument to
 
 - `"export"`
 - `"import"`
+- `"*"`
+
+The wildcard (`"*"`) can be used to subscribe to any and all observable events:
+
+```js
+const cluelessObserver = {
+  next(whoKnowsWhat) {
+    const msg = typeof whoKnowsWhat === 'string'
+      ? `Got a ${whoKnowsWhat}.`
+      : 'SOMETHING HAPPENED!';
+    console.log(msg);
+    },
+  error(e) { console.error('Nope!', e); },
+  complete() { console.info('All done!'); },
+}
+connector.subscribe('*', cluelessObserver);
+```
 
 An observer can also implement the `Observer<T>` interface as a class for more
 nuanced, stateful behavior, and so thatmultiple instantiations can each
@@ -389,11 +406,15 @@ const catalogObs = new ImportObserver('"dfc-b:CatalogItem"', api);
 const catalogSub = connector.subscribe('import', catalogObs);
 const addrSubAPIv1 = connector.subscribe('import', addrObs);
 
+// In effect, this will subscribe to both import and export events.
+const notAClue = connector.subscribe('*', new CluelessObserver());
+
 // Add new observers with different behaviors or modify others.
 const api2 = 'https://api.example.net/v2/';
 const addrObsAPIv2 = new ImportObserver('dfc-b:Address', api2);
 const addrSubAPIv2 = connector.subscribe('import', addrObsAPIv2);
 addrObsAPIv1.noisy = false;
+notAClue.unsubscribe();
 ```
 
 ## Configure

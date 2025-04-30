@@ -16,6 +16,7 @@ import IConnectorImporter from "./IConnectorImporter";
 import IConnectorImportOptions from "./IConnectorImportOptions.js";
 import IConnectorStore from "./IConnectorStore";
 import IGetterOptions from "./IGetterOptions.js";
+import { Subscription } from "./observer.js";
 import type { Observer } from "./observer.js";
 
 // Generated Code
@@ -51,7 +52,10 @@ const ConnectorObservables = {
 type ConnectorObservables = typeof ConnectorObservables;
 type ConnectorObservableKeys = keyof ConnectorObservables;
 type ConnectorObservableMethods = ConnectorObservables[ConnectorObservableKeys];
-type ConnectorObservableStrings = ConnectorObservableKeys | ConnectorObservableMethods;
+type ConnectorObservableStrings = 
+    | ConnectorObservableKeys
+    | ConnectorObservableMethods
+    | '*';
 
 export default class Connector implements IConnector {
 
@@ -209,6 +213,26 @@ export default class Connector implements IConnector {
     }
 
     public subscribe(event: ConnectorObservableStrings, observer: Observer<any>) {
+        // The wild card subscribes to all observable Connector methods.
+        if (event === '*') {
+            const observables = Object.keys(ConnectorObservables)
+            // A new teardown function a single subscription can be returned,
+            // which can unsubscribe from all observables simultaneously.
+            const teardown = observables.reduceRight((next, key) => {
+                const observableName = key as ConnectorObservableMethods;
+                // Immediately create a new subscription to each observable
+                // method that can be closed over by the return function.
+                const sub = this[observableName].subscribe(observer);
+                return () => {
+                    // The closure allows unsubscribe to be called lazily.
+                    sub.unsubscribe();
+                    // We're reducing right-to-left but the functions will be
+                    // called in reverse order, starting at index 0.
+                    next();
+                };
+            }, () => {});
+            return new Subscription(teardown);
+        }
         const observable = event in this.OBSERVABLES
             ? this.OBSERVABLES[event as ConnectorObservableKeys]
             : event as ConnectorObservableMethods;
